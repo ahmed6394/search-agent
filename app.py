@@ -8,20 +8,13 @@ async def on_message(message: cl.Message):
     """Handle incoming messages from Chainlit UI"""
     
     try:
-        # Run the synchronous agent_query in a thread to avoid blocking
+        # Run the agent_query (now with LangGraph) in a thread
         final_answer = await asyncio.to_thread(agent_query, message.content)
         
-        # Send the response as a new message
-        await cl.Message(content=final_answer).send()
-        
-    except RuntimeError as exc:
-        # Fallback for event loop issues
-        if "no running event loop" in str(exc).lower():
-            final_answer = agent_query(message.content)
-        else:
-            final_answer = f"❌ Error: {exc}"
+        # Send the response
         await cl.Message(content=final_answer).send()
         
     except Exception as exc:
-        final_answer = f"❌ Error: {exc}"
-        await cl.Message(content=final_answer).send()
+        error_msg = f"❌ Error: {exc}"
+        print(f"[ERROR] {error_msg}")
+        await cl.Message(content=error_msg).send()
