@@ -1,6 +1,7 @@
 """
-LLM Nodes for Agent Pipeline
+Node definitions for the LangGraph state machine.
 Each function is a "node" that processes state and returns updated state.
+Compatible with LangGraph 1.0.4+
 """
 
 import json
@@ -95,7 +96,12 @@ def agent_node(state: AgentState) -> dict:
     ]
     
     response = llm_with_tools.invoke(messages_with_system)
-    print(f"[AGENT] LLM response - tool_calls: {len(getattr(response, 'tool_calls', []))}")
+    
+    # Debug: check what tool_calls look like
+    tool_calls = getattr(response, 'tool_calls', [])
+    print(f"[AGENT] LLM response - tool_calls: {len(tool_calls)}")
+    if tool_calls and len(tool_calls) > 0:
+        print(f"[AGENT] First tool call type: {type(tool_calls[0])}, content: {tool_calls[0]}")
     
     # Return updated state
     return {
@@ -111,6 +117,7 @@ def tool_executor_node(state: AgentState) -> dict:
     - Extracts tool calls from last message
     - Executes each tool
     - Returns ToolMessage results to state
+    Compatible with both old and new tool_calls formats
     """
     last_message = state["messages"][-1]
     
@@ -124,23 +131,44 @@ def tool_executor_node(state: AgentState) -> dict:
     tool_results = []
     
     for tool_call in last_message.tool_calls:
-        tool_name = tool_call.name
-        tool_input = tool_call.args
-        tool_call_id = tool_call.id
+        # Handle both dict and object formats
+        if isinstance(tool_call, dict):
+            tool_name = tool_call.get("name") or tool_call.get("function", {}).get("name")
+            tool_input = tool_call.get("args") or tool_call.get("function", {}).get("arguments", {})
+            tool_call_id = tool_call.get("id")
+        else:
+            # Object format (older versions)
+            tool_name = tool_call.name
+            tool_input = tool_call.args
+            tool_call_id = tool_call.id
         
-        print(f"[TOOLS] Running: {tool_name}")
+        print(f"[TOOLS] Running: {tool_name} with input: {tool_input}")
         
         try:
             if tool_name == "web_search":
-                result = web_search(tool_input.get("q", ""))
+                # Handle both string and dict input
+                if isinstance(tool_input, dict):
+                    query = tool_input.get("q", "")
+                else:
+                    query = tool_input
+                result = web_search(query)
+            
             elif tool_name == "calculator":
-                result = calculator(tool_input.get("math_expression", ""))
+                # Handle both string and dict input
+                if isinstance(tool_input, dict):
+                    expr = tool_input.get("math_expression", "")
+                else:
+                    expr = tool_input
+                result = calculator(expr)
+            
             else:
                 result = f"Unknown tool: {tool_name}"
         
         except Exception as e:
             result = f"Tool execution error: {str(e)}"
-            print(f"[TOOLS] Error: {e}")
+            print(f"[TOOLS] Error executing {tool_name}: {e}")
+        
+        print(f"[TOOLS] Result: {str(result)[:100]}")
         
         # Create ToolMessage for each result
         tool_message = ToolMessage(

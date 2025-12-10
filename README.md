@@ -33,14 +33,6 @@ uv sync
 
 ## Usage
 
-### Command Line
-```python
-from llm.agent import agent_query
-
-result = agent_query("What is 2 + 2?")
-print(result)
-```
-
 ### Web UI (Chainlit)
 ```bash
 chainlit run app.py -w
